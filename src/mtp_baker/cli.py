@@ -11,6 +11,7 @@ from rich import print as rprint
 from mtp_baker.graft import graft_mtp_heads
 from mtp_baker.verify import verify_mtp_tensors
 from mtp_baker.safe_quantize import safe_quantize
+from mtp_baker.convert_hf import convert_hf_to_gguf
 
 app = typer.Typer(
     name="mtp-baker",
@@ -113,17 +114,45 @@ def quantize(
         raise typer.Exit(1)
 
 
+@app.command("convert-hf")
+def convert_hf(
+    model: str = typer.Option(..., "--model", "-m", help="Hugging Face model ID or local path (e.g. Qwen/Qwen3.5-35B-Base)"),
+    output: str = typer.Option(..., "--output", "-o", help="Output GGUF file path"),
+    outtype: str = typer.Option("f16", "--outtype", help="Output tensor type (f16 recommended for MTP)"),
+    convert_script: str | None = typer.Option(None, "--convert-script", help="Path to convert_hf_to_gguf.py"),
+):
+    """Convert a Hugging Face model to GGUF with MTP awareness.
+
+    Especially useful for Qwen models that may contain MTP heads.
+    After conversion it automatically verifies MTP tensors and gives next-step recommendations.
+    """
+    console.rule("[bold blue]HF → GGUF Conversion[/bold blue]")
+
+    try:
+        result = convert_hf_to_gguf(
+            model_id_or_path=model,
+            output_path=output,
+            outtype=outtype,
+            convert_script=convert_script,
+        )
+        console.print(Panel.fit(f"[bold green]Conversion successful![/bold green]\nOutput: {result}"))
+    except Exception as e:
+        console.print(Panel.fit(f"[bold red]Conversion failed:[/bold red]\n{str(e)}", border_style="red"))
+        raise typer.Exit(1)
+
+
 @app.command()
 def info():
     """Show information about mtp-baker and current capabilities."""
     console.print(Panel.fit(
-        "[bold]mtp-baker v0.3.0[/bold]\n\n"
+        "[bold]mtp-baker v0.4.0[/bold]\n\n"
         "Created to work around bugs in Unsloth GGUF export that truncate MTP tensors on Qwen models.\n\n"
         "[bold]Current best workflow:[/bold]\n"
-        "1. [green]graft[/green] MTP heads into base GGUF\n"
-        "2. [green]verify[/green] the result\n"
-        "3. [green]quantize[/green] safely (MTP tensors protected at higher precision)\n"
-        "4. Run in llama.cpp / turboquant / ik_llama.cpp forks",
+        "1. [green]convert-hf[/green] (from raw HF model)  OR  start with a base GGUF\n"
+        "2. [green]graft[/green] MTP heads if needed\n"
+        "3. [green]verify[/green] the result\n"
+        "4. [green]quantize[/green] safely (MTP tensors protected)\n"
+        "5. Run in llama.cpp / turboquant / ik_llama.cpp forks",
         title="mtp-baker",
         border_style="blue"
     ))
