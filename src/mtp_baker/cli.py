@@ -10,6 +10,7 @@ from rich import print as rprint
 
 from mtp_baker.graft import graft_mtp_heads
 from mtp_baker.verify import verify_mtp_tensors
+from mtp_baker.safe_quantize import safe_quantize
 
 app = typer.Typer(
     name="mtp-baker",
@@ -86,25 +87,43 @@ def verify(
 
 @app.command()
 def quantize(
-    input: str = typer.Option(..., "--input", "-i", help="Input (usually f16 or high precision) MTP GGUF"),
-    output: str = typer.Option(..., "--output", "-o", help="Output quantized GGUF"),
-    mtp_precision: str = typer.Option("q8_0", "--mtp-precision", help="Quantization type to use for MTP tensors (e.g. q8_0, f16)"),
+    input: str = typer.Option(..., "--input", "-i", help="High-precision MTP GGUF (recommended: f16 after grafting)"),
+    output: str = typer.Option(..., "--output", "-o", help="Output safe quantized GGUF"),
     base_quant: str = typer.Option("q4_k_m", "--base-quant", help="Quantization type for the main model tensors"),
+    mtp_precision: str = typer.Option("q8_0", "--mtp-precision", help="Precision to keep MTP tensors at (q8_0 recommended)"),
+    llama_quantize_path: str | None = typer.Option(None, "--llama-quantize-path", help="Path to llama-quantize binary (auto-detected if not provided)"),
 ):
-    """Re-quantize an MTP GGUF while protecting the MTP head tensors at higher precision."""
+    """Safely re-quantize an MTP GGUF while protecting MTP head tensors at higher precision.
+
+    This is the recommended way to create production-ready quantized MTP models.
+    """
     console.rule("[bold blue]Safe MTP Quantization[/bold blue]")
-    rprint("[yellow]Note: Full safe quantization with tensor protection is coming in v0.2.[/yellow]")
-    rprint("For now, you can use the standard llama-quantize tool after grafting, "
-           "or let me know if you want this implemented next.")
+
+    try:
+        result = safe_quantize(
+            input_path=input,
+            output_path=output,
+            quant_type=base_quant,
+            mtp_precision=mtp_precision,
+            llama_quantize_path=llama_quantize_path,
+        )
+        console.print(Panel.fit(f"[bold green]Success![/bold green] Safe quantized MTP model saved to:\n{result}"))
+    except Exception as e:
+        console.print(Panel.fit(f"[bold red]Quantization failed:[/bold red]\n{str(e)}", border_style="red"))
+        raise typer.Exit(1)
 
 
 @app.command()
 def info():
     """Show information about mtp-baker and current capabilities."""
     console.print(Panel.fit(
-        "[bold]mtp-baker v0.1.0[/bold]\n\n"
+        "[bold]mtp-baker v0.3.0[/bold]\n\n"
         "Created to work around bugs in Unsloth GGUF export that truncate MTP tensors on Qwen models.\n\n"
-        "Current best workflow: [green]Graft MTP heads[/green] → [green]Verify[/green] → Run in llama.cpp / turboquant fork",
+        "[bold]Current best workflow:[/bold]\n"
+        "1. [green]graft[/green] MTP heads into base GGUF\n"
+        "2. [green]verify[/green] the result\n"
+        "3. [green]quantize[/green] safely (MTP tensors protected at higher precision)\n"
+        "4. Run in llama.cpp / turboquant / ik_llama.cpp forks",
         title="mtp-baker",
         border_style="blue"
     ))
