@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mtp-baker"
+version = "0.1.0"
+description = "Toolkit for creating and managing MTP (Multi-Token Prediction) GGUF models, especially for Qwen. Includes GGUF grafting, verification, and safe quantization."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Grok + User Collaboration"}
+]
+dependencies = [
+    "typer[all]>=0.12.0",
+    "rich>=13.0.0",
+    "gguf>=0.10.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.66.0",
+]
+
+[project.scripts]
+mtp-baker = "mtp_baker.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mtp_baker"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
