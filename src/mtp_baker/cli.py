@@ -12,6 +12,7 @@ from mtp_baker.graft import graft_mtp_heads
 from mtp_baker.verify import verify_mtp_tensors
 from mtp_baker.safe_quantize import safe_quantize
 from mtp_baker.convert_hf import convert_hf_to_gguf
+from mtp_baker.mtp_graft_hf import graft_mtp_heads_on_hf_model, save_mtp_model_for_gguf
 
 app = typer.Typer(
     name="mtp-baker",
@@ -141,18 +142,52 @@ def convert_hf(
         raise typer.Exit(1)
 
 
+@app.command("graft-hf")
+def graft_hf(
+    model: str = typer.Option(..., "--model", "-m", help="Base Hugging Face model (e.g. Qwen/Qwen3.5-35B-Base)"),
+    output: str = typer.Option(..., "--output", "-o", help="Directory to save the grafted MTP model"),
+    num_heads: int = typer.Option(1, "--num-heads", help="Number of MTP heads to graft"),
+    use_lora: bool = typer.Option(True, "--use-lora/--no-lora", help="Apply LoRA to the backbone"),
+    save_for_gguf: bool = typer.Option(True, "--save-for-gguf", help="Also prepare for easy GGUF conversion"),
+):
+    """Graft MTP heads directly onto a Hugging Face model (PyTorch).
+
+    This is the full-control path for creating custom MTP models from scratch.
+    After grafting you can fine-tune and then use `convert-hf`.
+    """
+    console.rule("[bold blue]HF MTP Head Grafting (PyTorch)[/bold blue]")
+
+    try:
+        mtp_model = graft_mtp_heads_on_hf_model(
+            model_name_or_path=model,
+            num_mtp_heads=num_heads,
+            use_lora=use_lora,
+        )
+
+        if save_for_gguf:
+            save_mtp_model_for_gguf(mtp_model, output)
+        else:
+            mtp_model.save_pretrained(output)
+            console.print(f"[green]Model saved to {output}[/green]")
+
+    except Exception as e:
+        console.print(Panel.fit(f"[bold red]Grafting failed:[/bold red]\n{str(e)}", border_style="red"))
+        raise typer.Exit(1)
+
+
 @app.command()
 def info():
     """Show information about mtp-baker and current capabilities."""
     console.print(Panel.fit(
-        "[bold]mtp-baker v0.4.0[/bold]\n\n"
+        "[bold]mtp-baker v0.5.0[/bold]\n\n"
         "Created to work around bugs in Unsloth GGUF export that truncate MTP tensors on Qwen models.\n\n"
         "[bold]Current best workflow:[/bold]\n"
-        "1. [green]convert-hf[/green] (from raw HF model)  OR  start with a base GGUF\n"
-        "2. [green]graft[/green] MTP heads if needed\n"
-        "3. [green]verify[/green] the result\n"
-        "4. [green]quantize[/green] safely (MTP tensors protected)\n"
-        "5. Run in llama.cpp / turboquant / ik_llama.cpp forks",
+        "1. [green]convert-hf[/green] or [green]graft-hf[/green] (PyTorch grafting on HF model)\n"
+        "2. Fine-tune the MTP heads (optional but recommended)\n"
+        "3. [green]convert-hf[/green] the resulting model\n"
+        "4. [green]graft[/green] (GGUF level) if needed\n"
+        "5. [green]verify[/green] → [green]quantize[/green] safely\n"
+        "6. Run in llama.cpp / turboquant / ik_llama.cpp forks",
         title="mtp-baker",
         border_style="blue"
     ))
