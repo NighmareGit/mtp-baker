@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mtp-baker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Toolkit for creating and managing MTP (Multi-Token Prediction) GGUF models, especially for Qwen. Includes GGUF grafting, verification, and safe quantization."
 readme = "README.md"
 license = {text = "MIT"}
